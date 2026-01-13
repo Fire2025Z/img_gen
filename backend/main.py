@@ -1,158 +1,122 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-import base64
 from pydantic import BaseModel
-from PIL import Image, ImageDraw
-import io
 import requests
+import base64
+import re
+from typing import Optional
+import uvicorn
 
-app = FastAPI()
+app = FastAPI(title="AI Image Generator API")
 
-# Allow Flutter app to connect
+# CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"],  # Adjust for production
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-class PromptRequest(BaseModel):
+# Your Gemini API Key
+GEMINI_API_KEY = "AIzaSyDt1frcEs72TNrmQkCyKe6PxKhI7Jm6TT4"
+
+class GenerateRequest(BaseModel):
     prompt: str
 
-@app.get("/")
-def home():
-    return {"message": "AI Image Generator API", "status": "ready"}
+def detect_language(text: str) -> str:
+    """
+    Detect if the text is English, Arabic, or Kurdish
+    Returns: 'en', 'ar', 'ku', or raises error
+    """
+    # Check for Arabic script (Arabic and Kurdish use Arabic script)
+    arabic_pattern = re.compile(r'[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]+')
+    
+    if arabic_pattern.search(text):
+        # Try to distinguish between Arabic and Kurdish
+        # Common Arabic words
+        arabic_words = ['ال', 'في', 'من', 'على', 'أن', 'هذا', 'هذه']
+        # Common Kurdish words
+        kurdish_words = ['هه‌موو', 'كه‌', 'بۆ', 'له‌', 'ئه‌م', 'ئه‌و', 'وه‌ك']
+        
+        arabic_count = sum(1 for word in arabic_words if word in text)
+        kurdish_count = sum(1 for word in kurdish_words if word in text)
+        
+        if kurdish_count > arabic_count:
+            return 'ku'  # Kurdish
+        else:
+            return 'ar'  # Arabic
+    
+    # If no Arabic script, assume English
+    return 'en'
+
+def validate_prompt(prompt: str) -> bool:
+    """
+    Validate that prompt is in one of the allowed languages
+    """
+    try:
+        lang = detect_language(prompt)
+        return lang in ['en', 'ar', 'ku']
+    except:
+        return False
 
 @app.post("/generate")
-async def generate_image(request: PromptRequest):
-    print(f"Generating image for: {request.prompt}")
+async def generate_image(request: GenerateRequest):
+    """
+    Generate image from text prompt using Gemini API
+    Supports: English, Arabic, Kurdish
+    """
+    
+    # Validate language
+    if not validate_prompt(request.prompt):
+        raise HTTPException(
+            status_code=400,
+            detail="Prompt must be in English, Arabic, or Kurdish only"
+        )
+    
+    # Prepare the prompt for Gemini
+    enhanced_prompt = f"""
+    Generate a high-quality, detailed, and visually stunning image based on this description: {request.prompt}
+    
+    Requirements:
+    1. Create photorealistic or artistic image as appropriate
+    2. Use vibrant colors and good composition
+    3. Ensure high resolution and detail
+    4. Make it visually appealing and creative
+    """
     
     try:
-        # Try to generate with free API
-        image_bytes = await generate_real_image(request.prompt)
-        return {"image": base64.b64encode(image_bytes).decode()}
+        # Gemini API endpoint for image generation
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-pro-vision:generateContent?key={GEMINI_API_KEY}"
+        
+        # Note: Gemini currently doesn't have direct image generation API.
+        # We need to use text-to-image through a different approach.
+        # Let's use Google's Imagen or an alternative.
+        
+        # For now, let's use a different approach since Gemini doesn't directly generate images.
+        # We'll use the Vertex AI API for image generation
+        
+        # Alternative: Using Vertex AI's Imagen
+        # You might need to enable the Vertex AI API and use a different endpoint
+        
+        # For testing purposes, let's use a placeholder or implement a different service
+        # Since Gemini doesn't have image generation yet, let's use Stability AI or another service
+        
+        raise HTTPException(
+            status_code=501,
+            detail="Image generation service configuration needed. Please check the backend implementation."
+        )
         
     except Exception as e:
-        print(f"API error: {e}")
-        # Create fallback image
-        return create_fallback_image(request.prompt)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error generating image: {str(e)}"
+        )
 
-async def generate_real_image(prompt: str):
-    """Generate real AI image using free API"""
-    try:
-        # Use Prodia API (free, no key needed)
-        import asyncio
-        
-        # Create job
-        url = "https://api.prodia.com/v1/sd/generate"
-        response = requests.post(url, json={
-            "prompt": prompt,
-            "model": "dreamshaper_8_93211.safetensors [b5c85b7cce]",
-            "negative_prompt": "",
-            "steps": 25,
-            "cfg_scale": 7,
-            "seed": -1,
-            "width": 512,
-            "height": 512
-        })
-        
-        if response.status_code == 200:
-            job_id = response.json()["job"]
-            
-            # Check job status
-            for _ in range(30):  # Max 30 seconds wait
-                status_url = f"https://api.prodia.com/v1/job/{job_id}"
-                status_resp = requests.get(status_url)
-                
-                if status_resp.status_code == 200:
-                    data = status_resp.json()
-                    if data["status"] == "succeeded":
-                        # Get the image
-                        image_url = data["imageUrl"]
-                        img_response = requests.get(image_url)
-                        return img_response.content
-                    elif data["status"] == "failed":
-                        break
-                
-                await asyncio.sleep(1)  # Wait 1 second between checks
-            
-    except Exception as e:
-        print(f"Prodia error: {e}")
-    
-    # If Prodia fails, try another free API
-    return generate_with_fallback_api(prompt)
-
-def generate_with_fallback_api(prompt: str):
-    """Try another free API"""
-    try:
-        # Use Pollinations API (completely free, no key)
-        url = f"https://image.pollinations.ai/prompt/{prompt}"
-        response = requests.get(url, params={
-            "width": 512,
-            "height": 512,
-            "nologo": "true"
-        })
-        
-        if response.status_code == 200:
-            return response.content
-    except Exception as e:
-        print(f"Pollinations error: {e}")
-    
-    # If all APIs fail, create our own image
-    return create_simple_image(prompt)
-
-def create_simple_image(prompt: str):
-    """Create a simple colored image with text"""
-    # Create image with different colors based on prompt
-    colors = {
-        'red': (255, 0, 0),
-        'blue': (0, 0, 255),
-        'green': (0, 255, 0),
-        'yellow': (255, 255, 0),
-        'purple': (128, 0, 128),
-        'orange': (255, 165, 0),
-    }
-    
-    # Pick color based on prompt words
-    bg_color = colors['blue']  # default
-    
-    for color_name, color_rgb in colors.items():
-        if color_name in prompt.lower():
-            bg_color = color_rgb
-            break
-    
-    # Create image
-    img = Image.new('RGB', (512, 512), color=bg_color)
-    draw = ImageDraw.Draw(img)
-    
-    # Add text
-    draw.text((50, 50), "AI Generated", fill="white")
-    draw.text((50, 100), f"Prompt: {prompt[:30]}...", fill="white")
-    
-    # Detect language
-    if any(c in prompt for c in ['چ', 'پ', 'ژ', 'گ', 'ڕ', 'ڤ', 'ێ', 'ە']):
-        lang = "Kurdish"
-    elif any(ord(c) in range(0x0600, 0x06FF) for c in prompt):
-        lang = "Arabic"
-    else:
-        lang = "English"
-    
-    draw.text((50, 150), f"Language: {lang}", fill="yellow")
-    
-    # Add some shapes
-    draw.rectangle([100, 200, 300, 300], fill="white", outline="black", width=2)
-    draw.ellipse([150, 350, 250, 450], fill="red", outline="black", width=2)
-    
-    # Save to bytes
-    img_byte_arr = io.BytesIO()
-    img.save(img_byte_arr, format='PNG')
-    return img_byte_arr.getvalue()
-
-def create_fallback_image(prompt: str):
-    """Fallback JSON response"""
-    image_bytes = create_simple_image(prompt)
-    return {"image": base64.b64encode(image_bytes).decode()}
+@app.get("/health")
+async def health_check():
+    """Health check endpoint"""
+    return {"status": "healthy", "service": "AI Image Generator API"}
 
 if __name__ == "__main__":
-    import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)

@@ -219,7 +219,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     Text(
                       'Create Stunning Images',
                       style: TextStyle(
-                        fontSize: 32,
+                        fontSize: 22,
                         fontWeight: FontWeight.w700,
                         color: Colors.white,
                         height: 1.2,
@@ -342,12 +342,12 @@ class _HomeScreenState extends State<HomeScreen> {
                 
                 // Examples section
                 if (_image == null && !_loading) ...[
-                  SizedBox(height: 40),
+                  SizedBox(height: 30),
                   Text(
                     '✨ Inspiration Examples',
                     style: TextStyle(
                       color: Colors.white,
-                      fontSize: 20,
+                      fontSize: 16,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -366,11 +366,8 @@ class _HomeScreenState extends State<HomeScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         _buildExampleTile('🎨 "A magical forest with glowing mushrooms" (English)'),
-                        _buildExampleTile('🌅 "شمس تغرب خلف البحر" (Arabic)'),
                         _buildExampleTile('🏔️ "گوڵێکی زەرد لە بناری چیایەک" (Kurdish)'),
                         _buildExampleTile('🐉 "Ancient dragon flying over castle ruins" (English)'),
-                        _buildExampleTile('🐱 "قطة لطيفة تلعب بالخيط" (Arabic cat)'),
-                        _buildExampleTile('🌌 "ئەستێرەکان لە ئاسمان" (Kurdish stars)'),
                       ],
                     ),
                   ),
@@ -382,9 +379,9 @@ class _HomeScreenState extends State<HomeScreen> {
                                     child: Text(
                                                         'Developed by Zinar Mizury',
                                                         style: TextStyle(
-                                                          color: Colors.grey[500],
-                                                          fontSize: 16,
-                                                          fontWeight: FontWeight.w600,
+                                                          color: Colors.grey[700],
+                                                          fontSize: 12,
+                                                         // fontWeight: FontWeight.w600,
                                                         ),
                                                       ),
                                   ),
